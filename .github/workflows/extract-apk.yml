@@ -25,7 +25,7 @@ jobs:
           unzip -o freefire.apk "lib/*" -d output/ || true
           unzip -o freefire.apk "classes*.dex" -d output/dex || true
           unzip -o freefire.apk "AndroidManifest.xml" -d output/ || true
-          unzip -o freefire.apk "assets/*" -d output/assets || true
+          
           
           echo "=== Extracted Files ===" > output/summary.txt
           find output -type f >> output/summary.txt
