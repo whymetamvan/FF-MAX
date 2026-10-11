@@ -9,23 +9,26 @@ permissions:
 jobs:
   unzip-and-push:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
       - name: Download & Unzip
         run: |
-          curl -L -o ff-important-files.zip "https://github.com/whymetamvan/FF-MAX/releases/download/extracted-files/ff-important-files.zip"
+          curl -fL -o ff-important-files.zip "https://github.com/whymetamvan/FF-MAX/releases/download/extracted-files/ff-important-files.zip"
           rm -rf proto lib dex
-          unzip -o ff-important-files.zip -d.
+          unzip -o ff-important-files.zip -d .
           ls -R | head -n 100
 
       - name: Push to repo
         run: |
           git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add.
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add .
           git status
+
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
