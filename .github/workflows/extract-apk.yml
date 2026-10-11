@@ -1,0 +1,62 @@
+name: Extract Free Fire APK Important Files
+
+on:
+  workflow_dispatch:   # Bisa dijalankan manual
+  # push:              # Uncomment kalau mau otomatis saat push
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download APK
+        run: |
+          curl -L -o freefire.apk "https://github.com/whymetamvan/kpa-patch/releases/download/v1.132.1-1/free-fire-1-132-1.apk"
+
+      - name: Extract important files
+        run: |
+          mkdir -p output
+          
+          # Extract semua .proto
+          unzip -o freefire.apk "*.proto" -d output/proto || true
+          
+          # Extract lib (native)
+          unzip -o freefire.apk "lib/*" -d output/ || true
+          
+          # Extract classes.dex
+          unzip -o freefire.apk "classes*.dex" -d output/dex || true
+          
+          # Extract AndroidManifest
+          unzip -o freefire.apk "AndroidManifest.xml" -d output/ || true
+          
+          # Extract assets yang mungkin berguna
+          unzip -o freefire.apk "assets/*" -d output/assets || true
+          
+          # Buat ringkasan
+          echo "=== Extracted Files ===" > output/summary.txt
+          find output -type f >> output/summary.txt
+          
+          # Buat zip
+          cd output
+          zip -r ../ff-important-files.zip .
+          cd ..
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: extracted-files
+          name: Free Fire Important Files (Extracted)
+          body: |
+            Hasil extract otomatis dari Free Fire APK 1.132.1
+            
+            Isi:
+            - Semua file .proto
+            - Folder lib/ (native .so)
+            - classes*.dex
+            - AndroidManifest.xml
+            - assets/
+          files: ff-important-files.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
