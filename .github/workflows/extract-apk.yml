@@ -1,8 +1,11 @@
 name: Extract Free Fire APK Important Files
 
 on:
-  workflow_dispatch:   # Bisa dijalankan manual
-  # push:              # Uncomment kalau mau otomatis saat push
+  workflow_dispatch:
+
+# TAMBAHIN INI - INI YANG BIKIN 403 TADI
+permissions:
+  contents: write
 
 jobs:
   extract:
@@ -18,27 +21,15 @@ jobs:
       - name: Extract important files
         run: |
           mkdir -p output
-          
-          # Extract semua .proto
           unzip -o freefire.apk "*.proto" -d output/proto || true
-          
-          # Extract lib (native)
           unzip -o freefire.apk "lib/*" -d output/ || true
-          
-          # Extract classes.dex
           unzip -o freefire.apk "classes*.dex" -d output/dex || true
-          
-          # Extract AndroidManifest
           unzip -o freefire.apk "AndroidManifest.xml" -d output/ || true
-          
-          # Extract assets yang mungkin berguna
           unzip -o freefire.apk "assets/*" -d output/assets || true
           
-          # Buat ringkasan
           echo "=== Extracted Files ===" > output/summary.txt
           find output -type f >> output/summary.txt
           
-          # Buat zip
           cd output
           zip -r ../ff-important-files.zip .
           cd ..
