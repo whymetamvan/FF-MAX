@@ -16,25 +16,16 @@ jobs:
       - name: Download & Unzip
         run: |
           curl -L -o ff-important-files.zip "https://github.com/whymetamvan/FF-MAX/releases/download/extracted-files/ff-important-files.zip"
-
-          # hapus folder lama biar gak dobel
-          rm -rf proto lib dex AndroidManifest.xml assets summary.txt
-
-          # unzip ke root repo
+          rm -rf proto lib dex
           unzip -o ff-important-files.zip -d.
-
-          # cek hasil
           ls -R | head -n 100
 
       - name: Push to repo
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add.
           git status
-
-          # commit hanya kalau ada perubahan
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
