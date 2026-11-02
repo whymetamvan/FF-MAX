@@ -1,0 +1,132 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Asset Browser</title>
+
+<style>
+body {
+  margin: 0;
+  padding: 25px;
+  background: #10131b;
+  color: white;
+  font-family: Arial, sans-serif;
+}
+h1 { color: #65b5ff; }
+.stats {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+.stat {
+  background: #202635;
+  padding: 18px;
+  border-radius: 10px;
+  flex: 1;
+  min-width: 130px;
+}
+.gallery {
+  display: grid;
+  grid-template-columns:
+    repeat(auto-fill, minmax(160px, 1fr));
+  gap: 15px;
+}
+.card {
+  background: #202635;
+  border-radius: 10px;
+  padding: 10px;
+  overflow: hidden;
+}
+.card img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
+  background: #151923;
+}
+.name {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  margin-top: 8px;
+}
+pre {
+  background: #202635;
+  padding: 15px;
+  border-radius: 10px;
+  overflow: auto;
+  font-size: 12px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>Asset Browser</h1>
+<p>Unity Asset Inventory & Image Gallery</p>
+
+<div class="stats">
+  <div class="stat">
+    <h2 id="total">0</h2>
+    Candidate files
+  </div>
+  <div class="stat">
+    <h2 id="images">0</h2>
+    Preview images
+  </div>
+</div>
+
+<h2>Image Gallery</h2>
+<div class="gallery" id="gallery"></div>
+
+<h2>APK File Inventory</h2>
+<pre id="files">Loading...</pre>
+
+<script>
+async function loadAssets() {
+  try {
+    const response = await fetch("./manifest.json");
+    if (!response.ok) throw new Error("Manifest not found");
+
+    const data = await response.json();
+
+    document.getElementById("total").textContent =
+      data.candidate_files.length;
+
+    document.getElementById("images").textContent =
+      data.images.length;
+
+    document.getElementById("files").textContent =
+      data.candidate_files.map(x =>
+        x.path + " (" + x.size + " bytes)"
+      ).join("\n") || "No candidate files found.";
+
+    const gallery = document.getElementById("gallery");
+
+    data.images.forEach(path => {
+      const card = document.createElement("div");
+      card.className = "card";
+
+      const img = document.createElement("img");
+      img.src = "./" + path;
+      img.loading = "lazy";
+
+      const name = document.createElement("div");
+      name.className = "name";
+      name.textContent = path.split("/").pop();
+
+      card.append(img, name);
+      gallery.appendChild(card);
+    });
+  } catch (error) {
+    document.getElementById("files").textContent =
+      "Error: " + error.message;
+  }
+}
+
+loadAssets();
+</script>
+
+</body>
+</html>
