@@ -1,44 +1,98 @@
 
-      - name: Inspect APK and extract loose images
+name: Free Fire Asset Browser
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/extract.yml"
+      - "site/assets/**"
+      - "site/index.html"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
         run: |
-          python - <<'PY'
+          sudo apt-get update
+          sudo apt-get install -y unzip python3
+
+      - name: Download APK
+        run: |
+          curl -L --fail --retry 3 \
+            "https://github.com/whymetamvan/kpa-patch/releases/download/v1.132.1-1/free-fire-1-132-1.apk" \
+            -o game.apk
+
+      - name: Extract and scan APK
+        run: |
+          mkdir -p site/assets/apk
+
+          python3 <<'PY'
           import zipfile
           import json
           import os
           from pathlib import PurePosixPath
 
           apk = "game.apk"
-          os.makedirs("site/assets/apk", exist_ok=True)
 
-          extensions = (
-              ".bundle", ".assets", ".ress",
-              ".resource", ".unity3d", ".asset"
+          unity_extensions = (
+              ".bundle",
+              ".assets",
+              ".ress",
+              ".resource",
+              ".unity3d",
+              ".asset"
           )
 
           image_extensions = (
-              ".png", ".jpg", ".jpeg", ".webp", ".gif"
+              ".png",
+              ".jpg",
+              ".jpeg",
+              ".webp",
+              ".gif"
           )
 
           candidates = []
           images = []
-          total_size = 0
-          max_file = 20 * 1024 * 1024
-          max_total = 200 * 1024 * 1024
 
-          with zipfile.ZipFile(apk) as z:
-              for item in z.infolist():
+          max_file_size = 20 * 1024 * 1024
+          max_total_size = 200 * 1024 * 1024
+          total_size = 0
+
+          os.makedirs("site/assets/apk", exist_ok=True)
+
+          with zipfile.ZipFile(apk, "r") as archive:
+
+              for item in archive.infolist():
+
                   if item.is_dir():
                       continue
 
                   name = item.filename
                   lower = name.lower()
 
-                  if lower.endswith(extensions):
+                  # Identify Unity files
+                  if lower.endswith(unity_extensions):
                       candidates.append({
                           "path": name,
                           "size": item.file_size
                       })
 
+                  # Find ordinary image files
                   if not lower.endswith(image_extensions):
                       continue
 
@@ -47,38 +101,60 @@
                   if path.is_absolute() or ".." in path.parts:
                       continue
 
-                  if item.file_size > max_file:
+                  if item.file_size > max_file_size:
                       continue
 
-                  if total_size + item.file_size > max_total:
+                  if total_size + item.file_size > max_total_size:
                       continue
 
-                  content = z.read(item)
-                  output_name = f"apk/{len(images):05d}_{path.name}"
-                  output_path = os.path.join(
-                      "site/assets", output_name
+                  content = archive.read(item)
+
+                  extension = path.suffix.lower()
+                  filename = f"{len(images):05d}{extension}"
+
+                  output = os.path.join(
+                      "site/assets/apk",
+                      filename
                   )
 
-                  with open(output_path, "wb") as f:
-                      f.write(content)
+                  with open(output, "wb") as file:
+                      file.write(content)
+
+                  images.append(
+                      "assets/apk/" + filename
+                  )
 
                   total_size += len(content)
 
-                  images.append({
-                      "path": "assets/" + output_name,
-                      "size": len(content),
-                      "original": name
-                  })
-
           manifest = {
+              "apk": os.path.basename(apk),
               "candidate_files": candidates,
-              "images": images
+              "images": images,
+              "total_images": len(images),
+              "total_image_size": total_size
           }
 
-          with open("site/manifest.json", "w") as f:
-              json.dump(manifest, f, indent=2)
+          with open("site/manifest.json", "w") as file:
+              json.dump(manifest, file, indent=2)
 
-          print("Unity candidates:", len(candidates))
-          print("Extracted images:", len(images))
-          print("Total image size:", total_size)
+          print("Unity files:", len(candidates))
+          print("Images:", len(images))
+          print("Image size:", total_size)
           PY
+
+      - name: Upload inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: free-fire-asset-inventory
+          path: site/manifest.json
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload website
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy website
+        uses: actions/deploy-pages@v4
