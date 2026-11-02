@@ -1,103 +1,84 @@
 
-name: APK Asset Inventory & Web Viewer
-
-on:
-  workflow_dispatch:
-  push:
-    paths:
-      - "site/assets/**"
-      - ".github/workflows/extract.yml"
-
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: github-pages
-  cancel-in-progress: true
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download APK
+      - name: Inspect APK and extract loose images
         run: |
-          curl -L --fail --retry 3 \
-            "https://github.com/whymetamvan/kpa-patch/releases/download/v1.132.1-1/free-fire-1-132-1.apk" \
-            -o game.apk
-
-      - name: Inspect APK
-        run: |
-          mkdir -p site
           python - <<'PY'
           import zipfile
           import json
           import os
+          from pathlib import PurePosixPath
 
           apk = "game.apk"
+          os.makedirs("site/assets/apk", exist_ok=True)
 
           extensions = (
               ".bundle", ".assets", ".ress",
               ".resource", ".unity3d", ".asset"
           )
 
+          image_extensions = (
+              ".png", ".jpg", ".jpeg", ".webp", ".gif"
+          )
+
+          candidates = []
+          images = []
+          total_size = 0
+          max_file = 20 * 1024 * 1024
+          max_total = 200 * 1024 * 1024
+
           with zipfile.ZipFile(apk) as z:
-              entries = []
               for item in z.infolist():
                   if item.is_dir():
                       continue
 
-                  if item.filename.lower().endswith(extensions):
-                      entries.append({
-                          "path": item.filename,
+                  name = item.filename
+                  lower = name.lower()
+
+                  if lower.endswith(extensions):
+                      candidates.append({
+                          "path": name,
                           "size": item.file_size
                       })
 
-          os.makedirs("site/assets", exist_ok=True)
+                  if not lower.endswith(image_extensions):
+                      continue
 
-          images = []
-          for root, _, files in os.walk("site/assets"):
-              for filename in files:
-                  if filename.lower().endswith(
-                      (".png", ".jpg", ".jpeg", ".webp", ".gif")
-                  ):
-                      path = os.path.relpath(
-                          os.path.join(root, filename), "site"
-                      ).replace("\\", "/")
-                      images.append(path)
+                  path = PurePosixPath(name)
+
+                  if path.is_absolute() or ".." in path.parts:
+                      continue
+
+                  if item.file_size > max_file:
+                      continue
+
+                  if total_size + item.file_size > max_total:
+                      continue
+
+                  content = z.read(item)
+                  output_name = f"apk/{len(images):05d}_{path.name}"
+                  output_path = os.path.join(
+                      "site/assets", output_name
+                  )
+
+                  with open(output_path, "wb") as f:
+                      f.write(content)
+
+                  total_size += len(content)
+
+                  images.append({
+                      "path": "assets/" + output_name,
+                      "size": len(content),
+                      "original": name
+                  })
 
           manifest = {
-              "apk": os.path.basename(apk),
-              "candidate_files": entries,
+              "candidate_files": candidates,
               "images": images
           }
 
           with open("site/manifest.json", "w") as f:
               json.dump(manifest, f, indent=2)
 
-          print("Candidate files:", len(entries))
-          print("Preview images:", len(images))
+          print("Unity candidates:", len(candidates))
+          print("Extracted images:", len(images))
+          print("Total image size:", total_size)
           PY
-
-      - name: Upload inventory artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: apk-inventory
-          path: site/manifest.json
-
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload website
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
-
-      - name: Deploy website
-        id: deployment
-        uses: actions/deploy-pages@v4
