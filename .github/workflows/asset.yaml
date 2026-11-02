@@ -1,41 +1,103 @@
-name: Extract APK Assets
+
+name: APK Asset Inventory & Web Viewer
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - "site/assets/**"
+      - ".github/workflows/extract.yml"
 
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
 
 jobs:
-  extract:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Download APK
         run: |
-          wget -O game.apk \
-          https://github.com/whymetamvan/kpa-patch/releases/download/v1.132.1-1/free-fire-1-132-1.apk
+          curl -L --fail --retry 3 \
+            "https://github.com/whymetamvan/kpa-patch/releases/download/v1.132.1-1/free-fire-1-132-1.apk" \
+            -o game.apk
 
-      - name: Extract APK contents
+      - name: Inspect APK
         run: |
-          mkdir -p output/apk
-          unzip -q game.apk -d output/apk
+          mkdir -p site
+          python - <<'PY'
+          import zipfile
+          import json
+          import os
 
-      - name: Find asset files
-        run: |
-          find output/apk -type f \
-            \( -iname "*.bundle" \
-            -o -iname "*.asset" \
-            -o -iname "*.assets" \) \
-            > output/asset-list.txt
+          apk = "game.apk"
 
-          cat output/asset-list.txt
+          extensions = (
+              ".bundle", ".assets", ".ress",
+              ".resource", ".unity3d", ".asset"
+          )
 
-      - name: Upload extraction result
+          with zipfile.ZipFile(apk) as z:
+              entries = []
+              for item in z.infolist():
+                  if item.is_dir():
+                      continue
+
+                  if item.filename.lower().endswith(extensions):
+                      entries.append({
+                          "path": item.filename,
+                          "size": item.file_size
+                      })
+
+          os.makedirs("site/assets", exist_ok=True)
+
+          images = []
+          for root, _, files in os.walk("site/assets"):
+              for filename in files:
+                  if filename.lower().endswith(
+                      (".png", ".jpg", ".jpeg", ".webp", ".gif")
+                  ):
+                      path = os.path.relpath(
+                          os.path.join(root, filename), "site"
+                      ).replace("\\", "/")
+                      images.append(path)
+
+          manifest = {
+              "apk": os.path.basename(apk),
+              "candidate_files": entries,
+              "images": images
+          }
+
+          with open("site/manifest.json", "w") as f:
+              json.dump(manifest, f, indent=2)
+
+          print("Candidate files:", len(entries))
+          print("Preview images:", len(images))
+          PY
+
+      - name: Upload inventory artifact
         uses: actions/upload-artifact@v4
         with:
-          name: apk-extraction
-          path: output/
+          name: apk-inventory
+          path: site/manifest.json
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload website
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy website
+        id: deployment
+        uses: actions/deploy-pages@v4
