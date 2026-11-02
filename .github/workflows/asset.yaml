@@ -1,0 +1,41 @@
+name: Extract APK Assets
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download APK
+        run: |
+          wget -O game.apk \
+          https://github.com/whymetamvan/kpa-patch/releases/download/v1.132.1-1/free-fire-1-132-1.apk
+
+      - name: Extract APK contents
+        run: |
+          mkdir -p output/apk
+          unzip -q game.apk -d output/apk
+
+      - name: Find asset files
+        run: |
+          find output/apk -type f \
+            \( -iname "*.bundle" \
+            -o -iname "*.asset" \
+            -o -iname "*.assets" \) \
+            > output/asset-list.txt
+
+          cat output/asset-list.txt
+
+      - name: Upload extraction result
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-extraction
+          path: output/
